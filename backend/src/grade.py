@@ -1,34 +1,17 @@
-"""
-Week 4 - Grade a single answer with the Baseline, V1 and V2 models side by side.
-
-V2_NLP_Pipeline keeps the SAME output format as the Week 3 V1_NLP_Pipeline
-(question, score, maximum_score, feedback, confidence) and adds two fields:
-"model" and "missing_key_points". So anything built on the Week 3 JSON keeps working.
-
-Run src/compare_models.py once first (it creates models/grader_models.joblib), then:
-
-    uv run python src/grade.py
-    uv run python src/grade.py --question "Q1" --reference "..." --answer "..." --max-marks 5
-"""
-
 import argparse
 import json
 from pathlib import Path
-
 import joblib
 import numpy as np
-
 from features import TextEncoder, build_features, tfidf_cosine
 from preprocessing import clean_text
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BACKEND_DIR / "models" / "grader_models.joblib"
-
-MISSING_POINT_THRESHOLD = 0.5  # key point counts as "missing" if best similarity < 0.5
-
+MISSING_POINT_THRESHOLD = 0.5  
 
 def label_feedback(label):
-    """Same messages as the Week 3 pipeline."""
+    """Gives feedback based on the predicted label."""
     if label >= 2:
         return "The answer covers all core concepts present in the reference."
     elif label == 1:
@@ -74,7 +57,7 @@ class V2_NLP_Pipeline:
                         result["feedback"] += " Check these points: " + "; ".join(missing[:3]) + "."
         return json.dumps(result, indent=4)
 
-    # --- for the side-by-side demo only ---
+
     def grade_with_baseline(self, question_id, student_answer, reference_answer, max_marks=10):
         s, r = [clean_text(student_answer)], [clean_text(reference_answer)]
         x = tfidf_cosine(self.bundle["tfidf_vectorizer"], s, r).reshape(-1, 1)
@@ -83,7 +66,6 @@ class V2_NLP_Pipeline:
                                        max_marks, "baseline_tfidf"), indent=4)
 
     def grade_with_v1(self, question_id, student_answer, reference_answer, max_marks=10):
-        # Unlike the Week 3 notebook, the text is cleaned first, matching how V1 was trained.
         s = self.encoder.encode([clean_text(student_answer)])
         r = self.encoder.encode([clean_text(reference_answer)])
         x = np.sum(s * r, axis=1).reshape(-1, 1)

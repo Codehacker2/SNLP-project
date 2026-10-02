@@ -1,41 +1,11 @@
-"""
-Week 4 - Feature extraction for the improved (V2) grading model.
-
-Week 2 and Week 3 each gave the classifier ONE number: the cosine similarity
-between the student answer and the reference answer (TF-IDF in Week 2,
-MiniLM sentence embeddings in Week 3). Both reached ~50% test accuracy.
-
-Week 4 gives the classifier SEVEN numbers per answer, so it can see more than
-"how similar is the whole answer":
-
-    0 minilm_cosine       semantic similarity of the whole answer (Week 3 feature)
-    1 tfidf_cosine        word-level similarity of the whole answer (Week 2 feature)
-    2 keypoint_coverage   how well the student covers EACH point of the reference
-    3 word_overlap        share of reference words that the student used
-    4 log_student_len     length of the student answer (log of word count)
-    5 log_reference_len   length of the reference answer (log of word count)
-    6 length_ratio        student length / reference length (capped at 5)
-
-Feature 2 is the "rubric concept" idea from our Week 1 proposal (Approach B):
-the reference answer is split into key points (lines / sentences), and for each
-key point we find the most similar sentence in the student answer.
-"""
-
 import os
 import re
-
 import numpy as np
-
-# Same environment flags the Week 3 notebook used, so transformers does not
-# try to load TensorFlow / Flax.
+from preprocessing import clean_text
 os.environ.setdefault("USE_TF", "0")
 os.environ.setdefault("USE_FLAX", "0")
 
-# Re-use the exact cleaning function from Week 2 (src/preprocessing.py).
-from preprocessing import clean_text
-
-EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"  # same model as Week 3
-
+EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 FEATURE_NAMES = [
     "minilm_cosine",
     "tfidf_cosine",
@@ -50,7 +20,6 @@ FEATURE_NAMES = [
 def split_key_points(raw_text):
     """
     Split an answer into short "key points".
-
     Reference answers in EngSAF are often written as bullet lists or several
     sentences, so we split on new lines and on sentence endings, then clean
     each piece with the Week 2 clean_text(). Pieces shorter than 2 words
@@ -122,13 +91,13 @@ def build_features(student_raw, reference_raw, vectorizer, encoder, return_detai
     student_clean = [clean_text(x) for x in student_raw]
     reference_clean = [clean_text(x) for x in reference_raw]
 
-    # 1) Whole-answer similarities
+    # Whole-answer similarities
     stud_emb = encoder.encode(student_clean)
     ref_emb = encoder.encode(reference_clean)
     minilm_cos = np.sum(stud_emb * ref_emb, axis=1)
     tfidf_cos = tfidf_cosine(vectorizer, student_clean, reference_clean)
 
-    # 2) Key-point coverage: encode every key point / student sentence once
+    # Key-point coverage: encode every key point / student sentence once
     ref_points = [split_key_points(x) for x in reference_raw]
     stud_points = [split_key_points(x) for x in student_raw]
     encoder.encode([p for pts in ref_points + stud_points for p in pts])

@@ -1,29 +1,5 @@
-"""
-Week 4 - Baseline vs Improved model comparison.
-
-Trains and evaluates three models on the SAME EngSAF splits that Week 2 created
-(data/engsaf_train.csv, engsaf_validation.csv, engsaf_test.csv):
-
-    Baseline (Week 2): TF-IDF cosine similarity      -> Logistic Regression
-    V1       (Week 3): MiniLM cosine similarity      -> Logistic Regression
-    V2       (Week 4): 7 hybrid features (features.py)-> scaled, class-balanced
-                       Logistic Regression, tuned on the validation set
-
-The Baseline and V1 code reproduces the two notebooks exactly, so their test
-accuracy should match what we reported before (0.5020 and 0.5000).
-
-Outputs
-    results/model_comparison.md   tables for the report (copy into the PDF)
-    results/model_comparison.csv  same numbers as a CSV
-    models/grader_models.joblib   trained models, used by src/grade.py
-
-Run from the backend/ folder:
-    uv run python src/compare_models.py
-"""
-
 import time
 from pathlib import Path
-
 import joblib
 import numpy as np
 import pandas as pd
@@ -39,21 +15,16 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-
 from features import EMBEDDING_MODEL_NAME, FEATURE_NAMES, TextEncoder, build_features, tfidf_cosine
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BACKEND_DIR / "data"
 RESULTS_DIR = BACKEND_DIR / "results"
 MODELS_DIR = BACKEND_DIR / "models"
-
-LABELS = [0, 1, 2]  # 0 = incorrect, 1 = partially correct, 2 = correct
+LABELS = [0, 1, 2]  
 TEXT_COLS = ["student_answer", "reference_answer", "student_answer_clean", "reference_answer_clean"]
 
 
-# ----------------------------------------------------------------------------
-# Helpers
-# ----------------------------------------------------------------------------
 def load_splits():
     splits = {}
     for name in ["train", "validation", "test"]:
@@ -62,7 +33,6 @@ def load_splits():
             df[col] = df[col].fillna("").astype(str)
         splits[name] = df
     return splits
-
 
 def evaluate(y_true, y_pred):
     """All metrics used in the comparison table."""
@@ -74,7 +44,6 @@ def evaluate(y_true, y_pred):
         "partial_recall": recall_score(y_true, y_pred, labels=[1], average="macro", zero_division=0),
     }
 
-
 def md_table(headers, rows):
     """Tiny markdown table writer (avoids needing the 'tabulate' package)."""
     lines = ["| " + " | ".join(headers) + " |", "|" + "---|" * len(headers)]
@@ -82,14 +51,9 @@ def md_table(headers, rows):
         lines.append("| " + " | ".join(str(x) for x in r) + " |")
     return "\n".join(lines)
 
-
 def fmt(x):
     return f"{x:.4f}"
 
-
-# ----------------------------------------------------------------------------
-# Main
-# ----------------------------------------------------------------------------
 def main():
     RESULTS_DIR.mkdir(exist_ok=True)
     MODELS_DIR.mkdir(exist_ok=True)
@@ -99,7 +63,6 @@ def main():
     print(f"Train {train.shape}, Validation {val.shape}, Test {test.shape}")
     y = {name: df["score"].values for name, df in splits.items()}
 
-    # ---------------- Baseline (Week 2) ----------------
     print("\n[1/3] Baseline: TF-IDF cosine + Logistic Regression (Week 2)")
     t0 = time.time()
     vectorizer = TfidfVectorizer()
@@ -112,7 +75,6 @@ def main():
     pred_base = {n: base_clf.predict(X_base[n]) for n in splits}
     time_base = time.time() - t0
 
-    # ---------------- V1 (Week 3) ----------------
     print(f"\n[2/3] V1: {EMBEDDING_MODEL_NAME} cosine + Logistic Regression (Week 3)")
     t0 = time.time()
     encoder = TextEncoder(EMBEDDING_MODEL_NAME)
@@ -125,7 +87,6 @@ def main():
     pred_v1 = {n: v1_clf.predict(X_v1[n]) for n in splits}
     time_v1 = time.time() - t0
 
-    # ---------------- V2 (Week 4) ----------------
     print("\n[3/3] V2: hybrid features + tuned Logistic Regression (Week 4)")
     t0 = time.time()
     X_v2 = {
@@ -151,7 +112,7 @@ def main():
     pred_v2 = {n: v2_model.predict(X_v2[n]) for n in splits}
     time_v2 = time.time() - t0
 
-    # ---------------- Comparison tables ----------------
+    # Comparison tables 
     models = [
         ("Baseline - TF-IDF + LR (Week 2)", pred_base, time_base),
         ("V1 - MiniLM + LR (Week 3)", pred_v1, time_v1),
@@ -183,7 +144,7 @@ def main():
         md += ["", f"**{name}**", "",
                md_table(["true \\ pred", "0", "1", "2"], [[LABELS[i], *cm[i]] for i in range(3)])]
 
-    # ---------------- Ablation: which features helped? ----------------
+    # Ablation: which features helped? 
     ablations = [
         ("MiniLM cosine only", [0]),
         ("+ TF-IDF cosine", [0, 1]),
@@ -198,7 +159,7 @@ def main():
     md += ["", "## Ablation (test set, same classifier settings as V2)", "",
            md_table(["Features used", "Accuracy", "Macro-F1", "QWK"], ab_rows)]
 
-    # ---------------- What the V2 model learned ----------------
+    # What the V2 model learned 
     lr = v2_model.named_steps["logisticregression"]
     coef_correct = lr.coef_[list(lr.classes_).index(2)]
     md += ["", "## V2 feature weights for the 'correct' class", "",
@@ -211,7 +172,7 @@ def main():
     (RESULTS_DIR / "model_comparison.md").write_text(report, encoding="utf-8")
     pd.DataFrame(csv_rows).to_csv(RESULTS_DIR / "model_comparison.csv", index=False)
 
-    # ---------------- Save models for src/grade.py ----------------
+    # Save models for src/grade.py 
     joblib.dump(
         {
             "embedding_model": EMBEDDING_MODEL_NAME,
@@ -228,7 +189,6 @@ def main():
     print(f"Saved: {RESULTS_DIR / 'model_comparison.md'}")
     print(f"Saved: {RESULTS_DIR / 'model_comparison.csv'}")
     print(f"Saved: {MODELS_DIR / 'grader_models.joblib'}")
-
 
 if __name__ == "__main__":
     main()
