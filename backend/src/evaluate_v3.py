@@ -1,21 +1,10 @@
-"""
-Week 5-style evaluation + error analysis for the V3 model from
-improve_model.py. Mirrors week5.ipynb's structure (metrics, confusion
-matrix, error-type breakdown, confidence summary) but against the improved
-model, on the same untouched test split.
-
-Run from backend/: `python src/evaluate_v3.py`
-"""
 from pathlib import Path
-
 import joblib
 import numpy as np
 import pandas as pd
 from sklearn.metrics import (
     accuracy_score, confusion_matrix, cohen_kappa_score,
-    f1_score, mean_absolute_error, recall_score, classification_report,
-)
-
+    f1_score, mean_absolute_error, recall_score, classification_report)
 from compare_models import DATA_DIR, MODELS_DIR, RESULTS_DIR
 from features import TextEncoder, build_features_v3
 
@@ -43,7 +32,7 @@ def main():
         "MAE": mean_absolute_error(y_true, y_pred),
         "Partial Recall": recall_score(y_true, y_pred, labels=[1], average="macro", zero_division=0),
     }
-    print("=== V3 Test Metrics ===")
+    print("V3 Test Metrics")
     for k, v in metrics.items():
         print(f"{k}: {v:.4f}")
 
@@ -82,8 +71,6 @@ def main():
     print("\n=== Confidence by correctness ===")
     print(conf_summary)
 
-    # Save the per-row results so they can be inspected/compared to Week 5's
-    # failure-case table without re-running the model.
     out_path = RESULTS_DIR / "v3_test_predictions.csv"
     error_df.to_csv(out_path, index=False)
     print(f"\nSaved: {out_path}")

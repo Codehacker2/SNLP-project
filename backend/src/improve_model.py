@@ -9,10 +9,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import f1_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
-
 from compare_models import DATA_DIR, MODELS_DIR, RESULTS_DIR, evaluate, fmt, load_splits, md_table
 from features import EMBEDDING_MODEL_NAME, TextEncoder, V3_FEATURE_NAMES, build_features_v3
-
 
 def main():
     RESULTS_DIR.mkdir(exist_ok=True)
