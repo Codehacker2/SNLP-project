@@ -130,3 +130,81 @@ def build_features(student_raw, reference_raw, vectorizer, encoder, return_detai
 
     features = np.array(rows, dtype=float)
     return (features, details) if return_details else features
+
+# V3 
+V3_FEATURE_NAMES = [
+    "minilm_cosine", "tfidf_cosine", "keypoint_min_coverage",
+    "word_overlap", "log_student_len", "log_reference_len",
+    "length_ratio", "negation_mismatch",
+]
+
+_NEGATION_WORDS = {
+    "not", "no", "never", "none", "neither", "nor", "cannot", "cant",
+    "dont", "doesnt", "didnt", "isnt", "arent", "wasnt", "werent",
+    "wont", "wouldnt", "shouldnt", "couldnt", "without", "false",
+    "incorrect", "untrue", "unable", "lack", "lacks", "lacking", "nothing",
+}
+
+
+def negation_mismatch(student_clean, reference_clean):
+    """
+    Return 1.0 if one answer contains a negation word and the other doesn't, else 0.0.
+    This is a simple feature that helps the model avoid false positives where
+    the student answer is the opposite of the reference answer.
+    """
+    s_words = set(student_clean.split())
+    r_words = set(reference_clean.split())
+    s_neg = bool(s_words & _NEGATION_WORDS)
+    r_neg = bool(r_words & _NEGATION_WORDS)
+    return 1.0 if s_neg != r_neg else 0.0
+
+
+def build_features_v3(student_raw, reference_raw, vectorizer, encoder, return_details=False):
+    """
+   Build features function + negation mismatch and keypoint min coverage.
+    """
+    student_raw = ["" if x is None else str(x) for x in student_raw]
+    reference_raw = ["" if x is None else str(x) for x in reference_raw]
+    student_clean = [clean_text(x) for x in student_raw]
+    reference_clean = [clean_text(x) for x in reference_raw]
+
+    stud_emb = encoder.encode(student_clean)
+    ref_emb = encoder.encode(reference_clean)
+    minilm_cos = np.sum(stud_emb * ref_emb, axis=1)
+    tfidf_cos = tfidf_cosine(vectorizer, student_clean, reference_clean)
+
+    ref_points = [split_key_points(x) for x in reference_raw]
+    stud_points = [split_key_points(x) for x in student_raw]
+    encoder.encode([p for pts in ref_points + stud_points for p in pts])
+
+    rows, details = [], []
+    for i in range(len(student_raw)):
+        k = encoder.encode(ref_points[i])
+        s = encoder.encode(stud_points[i])
+        best = (k @ s.T).max(axis=1)
+        min_coverage = float(best.min())
+
+        s_words = set(student_clean[i].split())
+        r_words = set(reference_clean[i].split())
+        overlap = len(s_words & r_words) / max(len(r_words), 1)
+
+        s_len = len(student_clean[i].split())
+        r_len = len(reference_clean[i].split())
+
+        neg_mismatch = negation_mismatch(student_clean[i], reference_clean[i])
+
+        rows.append([
+            float(minilm_cos[i]),
+            float(tfidf_cos[i]),
+            min_coverage,
+            overlap,
+            np.log1p(s_len),
+            np.log1p(r_len),
+            min(s_len / max(r_len, 1), 5.0),
+            neg_mismatch,
+        ])
+        if return_details:
+            details.append(list(zip(ref_points[i], best.round(3).tolist())))
+
+    features = np.array(rows, dtype=float)
+    return (features, details) if return_details else features
