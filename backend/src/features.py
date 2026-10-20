@@ -7,13 +7,13 @@ os.environ.setdefault("USE_FLAX", "0")
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 FEATURE_NAMES = [
-    "minilm_cosine",
-    "tfidf_cosine",
-    "keypoint_coverage",
-    "word_overlap",
-    "log_student_len",
-    "log_reference_len",
-    "length_ratio",
+    "minilm_cosine", "tfidf_cosine", "keypoint_coverage",
+    "word_overlap", "log_student_len", "log_reference_len", "length_ratio",
+]
+V3_FEATURE_NAMES = [
+    "minilm_cosine", "tfidf_cosine", "keypoint_min_coverage",
+    "word_overlap", "log_student_len", "log_reference_len",
+    "length_ratio", "negation_mismatch",
 ]
 
 
@@ -74,7 +74,8 @@ def tfidf_cosine(vectorizer, student_clean, reference_clean):
     return np.asarray(s.multiply(r).sum(axis=1)).ravel()
 
 
-def build_features(student_raw, reference_raw, vectorizer, encoder, return_details=False):
+def _build_features(student_raw, reference_raw, vectorizer, encoder,
+    coverage_reducer,include_negation, return_details=False,):
     """
     Build the 7-feature matrix for a list of (student answer, reference answer) pairs.
 
@@ -91,7 +92,9 @@ def build_features(student_raw, reference_raw, vectorizer, encoder, return_detai
     student_clean = [clean_text(x) for x in student_raw]
     reference_clean = [clean_text(x) for x in reference_raw]
 
-    # Whole-answer similarities
+    if len(student_raw) != len(reference_raw):
+        raise ValueError("student_raw and reference_raw must have the same length")
+
     stud_emb = encoder.encode(student_clean)
     ref_emb = encoder.encode(reference_clean)
     minilm_cos = np.sum(stud_emb * ref_emb, axis=1)
@@ -107,7 +110,7 @@ def build_features(student_raw, reference_raw, vectorizer, encoder, return_detai
         k = encoder.encode(ref_points[i])   # (num_key_points, dim)
         s = encoder.encode(stud_points[i])  # (num_student_sentences, dim)
         best = (k @ s.T).max(axis=1)        # best match for each key point
-        coverage = float(best.mean())
+        coverage = float(coverage_reducer(best))
 
         s_words = set(student_clean[i].split())
         r_words = set(reference_clean[i].split())
@@ -116,7 +119,7 @@ def build_features(student_raw, reference_raw, vectorizer, encoder, return_detai
         s_len = len(student_clean[i].split())
         r_len = len(reference_clean[i].split())
 
-        rows.append([
+        row = [
             float(minilm_cos[i]),
             float(tfidf_cos[i]),
             coverage,
@@ -124,19 +127,28 @@ def build_features(student_raw, reference_raw, vectorizer, encoder, return_detai
             np.log1p(s_len),
             np.log1p(r_len),
             min(s_len / max(r_len, 1), 5.0),
-        ])
+        ]
+        if include_negation:
+            row.append(negation_mismatch(student_clean[i], reference_clean[i]))
+        rows.append(row)
         if return_details:
             details.append(list(zip(ref_points[i], best.round(3).tolist())))
 
     features = np.array(rows, dtype=float)
     return (features, details) if return_details else features
 
-# V3 
-V3_FEATURE_NAMES = [
-    "minilm_cosine", "tfidf_cosine", "keypoint_min_coverage",
-    "word_overlap", "log_student_len", "log_reference_len",
-    "length_ratio", "negation_mismatch",
-]
+
+def build_features(student_raw, reference_raw, vectorizer, encoder, return_details=False):
+    """Build the seven V2 hybrid features."""
+    return _build_features(
+        student_raw,
+        reference_raw,
+        vectorizer,
+        encoder,
+        coverage_reducer=np.mean,
+        include_negation=False,
+        return_details=return_details,
+)
 
 _NEGATION_WORDS = {
     "not", "no", "never", "none", "neither", "nor", "cannot", "cant",
@@ -160,51 +172,13 @@ def negation_mismatch(student_clean, reference_clean):
 
 
 def build_features_v3(student_raw, reference_raw, vectorizer, encoder, return_details=False):
-    """
-   Build features function + negation mismatch and keypoint min coverage.
-    """
-    student_raw = ["" if x is None else str(x) for x in student_raw]
-    reference_raw = ["" if x is None else str(x) for x in reference_raw]
-    student_clean = [clean_text(x) for x in student_raw]
-    reference_clean = [clean_text(x) for x in reference_raw]
-
-    stud_emb = encoder.encode(student_clean)
-    ref_emb = encoder.encode(reference_clean)
-    minilm_cos = np.sum(stud_emb * ref_emb, axis=1)
-    tfidf_cos = tfidf_cosine(vectorizer, student_clean, reference_clean)
-
-    ref_points = [split_key_points(x) for x in reference_raw]
-    stud_points = [split_key_points(x) for x in student_raw]
-    encoder.encode([p for pts in ref_points + stud_points for p in pts])
-
-    rows, details = [], []
-    for i in range(len(student_raw)):
-        k = encoder.encode(ref_points[i])
-        s = encoder.encode(stud_points[i])
-        best = (k @ s.T).max(axis=1)
-        min_coverage = float(best.min())
-
-        s_words = set(student_clean[i].split())
-        r_words = set(reference_clean[i].split())
-        overlap = len(s_words & r_words) / max(len(r_words), 1)
-
-        s_len = len(student_clean[i].split())
-        r_len = len(reference_clean[i].split())
-
-        neg_mismatch = negation_mismatch(student_clean[i], reference_clean[i])
-
-        rows.append([
-            float(minilm_cos[i]),
-            float(tfidf_cos[i]),
-            min_coverage,
-            overlap,
-            np.log1p(s_len),
-            np.log1p(r_len),
-            min(s_len / max(r_len, 1), 5.0),
-            neg_mismatch,
-        ])
-        if return_details:
-            details.append(list(zip(ref_points[i], best.round(3).tolist())))
-
-    features = np.array(rows, dtype=float)
-    return (features, details) if return_details else features
+    """Build the eight V3 hybrid features."""
+    return _build_features(
+        student_raw,
+        reference_raw,
+        vectorizer,
+        encoder,
+        coverage_reducer=np.min,
+        include_negation=True,
+        return_details=return_details,
+    )

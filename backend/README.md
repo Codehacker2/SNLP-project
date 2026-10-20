@@ -55,6 +55,17 @@ documentation is available at:
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - ReDoc: `http://127.0.0.1:8000/redoc`
 
+### Run the simple frontend
+
+With the API running, open a second terminal from the repository root:
+
+```bash
+python -m http.server 5500 --directory frontend
+```
+
+Then open `http://127.0.0.1:5500` in a browser. The frontend uses the API at
+`http://127.0.0.1:8000` and supports V3, V2, V1, and baseline grading.
+
 ### Health check
 
 ```bash

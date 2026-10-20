@@ -27,7 +27,6 @@ class V2_NLP_Pipeline:
         self.encoder = encoder
 
     def _result(self, question_id, label, proba, max_marks, model_name):
-        raw_score = (int(label) / 2.0) * max_marks
         return {
             "question": question_id,
             "score": round((int(label) / 2.0) * max_marks),
@@ -37,15 +36,17 @@ class V2_NLP_Pipeline:
             "model": model_name,
         }
 
-    def grade_answer_dict(self, question_id, student_answer, reference_answer, max_marks=10):
-        """Same as grade_answer(), but returns a dict instead of a JSON string (used by the API)."""
-        X, details = build_features(
+    def _grade_hybrid_dict(self, question_id, student_answer, reference_answer,
+        max_marks, feature_builder, model_key, model_name,):
+
+        X, details = feature_builder(
             [student_answer], [reference_answer],
             self.bundle["tfidf_vectorizer"], self.encoder, return_details=True,
         )
-        model = self.bundle["v2_model"]
+        model = self.bundle[model_key]
         label = model.predict(X)[0]
-        result = self._result(question_id, label, model.predict_proba(X)[0], max_marks, "v2_hybrid")
+        result = self._result(
+            question_id, label, model.predict_proba(X)[0], max_marks, model_name)
 
         missing = [p for p, sim in details[0] if sim < MISSING_POINT_THRESHOLD]
         result["missing_key_points"] = missing[:3]
@@ -58,6 +59,12 @@ class V2_NLP_Pipeline:
             else:
                 result["feedback"] += " Check these points: " + "; ".join(missing[:3]) + "."
         return result
+
+    def grade_answer_dict(self, question_id, student_answer, reference_answer, max_marks=10):
+        """Grade with V2 hybrid features and return a dictionary."""
+        return self._grade_hybrid_dict(
+            question_id, student_answer, reference_answer, max_marks,
+            build_features, "v2_model", "v2_hybrid",)
     
     def grade_answer(self, question_id, student_answer, reference_answer, max_marks=10):
         return json.dumps(self.grade_answer_dict(question_id, student_answer, reference_answer, max_marks), indent=4)
@@ -72,25 +79,9 @@ class V2_NLP_Pipeline:
         if "v3_model" not in self.bundle:
             return self.grade_answer_dict(question_id, student_answer, reference_answer, max_marks)
 
-        X, details = build_features_v3(
-            [student_answer], [reference_answer],
-            self.bundle["tfidf_vectorizer"], self.encoder, return_details=True,
-        )
-        model = self.bundle["v3_model"]
-        label = model.predict(X)[0]
-        result = self._result(question_id, label, model.predict_proba(X)[0], max_marks, "v3_improved")
-
-        missing = [p for p, sim in details[0] if sim < MISSING_POINT_THRESHOLD]
-        result["missing_key_points"] = missing[:3]
-        if missing:
-            if label >= 2:
-                result["feedback"] = (
-                    "The answer is graded correct overall, but these reference points were not found: "
-                    + "; ".join(missing[:3]) + "."
-                )
-            else:
-                result["feedback"] += " Check these points: " + "; ".join(missing[:3]) + "."
-        return result
+        return self._grade_hybrid_dict(
+            question_id, student_answer, reference_answer, max_marks,
+            build_features_v3, "v3_model", "v3_improved",)
 
     def grade_with_v3(self, question_id, student_answer, reference_answer, max_marks=10):
         return json.dumps(self.grade_with_v3_dict(question_id, student_answer, reference_answer, max_marks), indent=4)
@@ -104,13 +95,21 @@ class V2_NLP_Pipeline:
     def grade_with_baseline(self, question_id, student_answer, reference_answer, max_marks=10):
         return json.dumps(self.grade_with_baseline_dict(question_id, student_answer, reference_answer, max_marks), indent=4)
 
-    def grade_with_v1(self, question_id, student_answer, reference_answer, max_marks=10):
+    def grade_with_v1_dict(self, question_id, student_answer, reference_answer, max_marks=10):
         s = self.encoder.encode([clean_text(student_answer)])
         r = self.encoder.encode([clean_text(reference_answer)])
         x = np.sum(s * r, axis=1).reshape(-1, 1)
         clf = self.bundle["v1_clf"]
-        return json.dumps(self._result(question_id, clf.predict(x)[0], clf.predict_proba(x)[0],
-                                       max_marks, "v1_minilm"), indent=4)
+        return self._result(
+            question_id, clf.predict(x)[0], clf.predict_proba(x)[0],
+            max_marks, "v1_minilm",)
+
+    def grade_with_v1(self, question_id, student_answer, reference_answer, max_marks=10):
+        return json.dumps(
+            self.grade_with_v1_dict(
+                question_id, student_answer, reference_answer, max_marks),
+            indent=4,
+        )
 
 
 def main():
