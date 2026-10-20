@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Answer Grader</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <header class="site-header">
+        <p class="eyebrow">AI Exam Answer Grader</p>
+        <h1>Review an answer</h1>
+        <p class="intro">
+          Compare a student response with the reference answer and get a simple score.
+        </p>
+      </header>
+
+      <form id="grader-form" class="grader-card">
+        <div class="field">
+          <label for="question">Question</label>
+          <input id="question" name="question" type="text" placeholder="Q4" required />
+        </div>
+
+        <div class="field">
+          <label for="reference-answer">Reference answer</label>
+          <textarea
+            id="reference-answer"
+            name="reference-answer"
+            rows="5"
+            placeholder="Enter the instructor's answer"
+            required
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label for="student-answer">Student answer</label>
+          <textarea
+            id="student-answer"
+            name="student-answer"
+            rows="5"
+            placeholder="Enter the student's answer"
+            required
+          ></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="maximum-marks">Maximum marks</label>
+            <input id="maximum-marks" name="maximum-marks" type="number" min="1" value="10" required />
+          </div>
+
+          <div class="field">
+            <label for="model">Model</label>
+            <select id="model" name="model">
+              <option value="v3">V3</option>
+              <option value="v2">V2</option>
+              <option value="v1">V1</option>
+              <option value="baseline">Baseline</option>
+            </select>
+          </div>
+        </div>
+
+        <button id="submit-button" type="submit">Grade answer</button>
+        <p id="form-status" class="status" role="status"></p>
+      </form>
+
+      <section id="result" class="result-card" aria-live="polite" hidden>
+        <div class="result-heading">
+          <div>
+            <p class="eyebrow">Result</p>
+            <h2 id="result-title">Answer graded</h2>
+          </div>
+          <p class="score"><span id="score-value"></span><small id="score-maximum"></small></p>
+        </div>
+
+        <div class="result-details">
+          <div>
+            <span class="detail-label">Confidence</span>
+            <strong id="confidence-value"></strong>
+          </div>
+          <div>
+            <span class="detail-label">Model used</span>
+            <strong id="model-value"></strong>
+          </div>
+        </div>
+
+        <div class="feedback-block">
+          <span class="detail-label">Feedback</span>
+          <p id="feedback-value"></p>
+        </div>
+
+        <div id="missing-block" class="feedback-block" hidden>
+          <span class="detail-label">Points to review</span>
+          <ul id="missing-points"></ul>
+        </div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
