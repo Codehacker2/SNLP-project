@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from features import TextEncoder
 from grade import V2_NLP_Pipeline
 from booklet import GradeBookletRequest, grade_booklet
+from digitizer_client import DigitizePagesRequest, digitize_pages
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BACKEND_DIR / "models" / "grader_models.joblib"
@@ -229,3 +230,9 @@ def evaluate_booklet(req: GradeBookletRequest, model: ModelChoice = "v3"):
         return grade_booklet(req, evaluate)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/digitize-pages")
+def digitize_uploaded_pages(req: DigitizePagesRequest):
+    """Send PDF or image files to the local digitizer and return its schema 1.0 JSON."""
+    return digitize_pages(req)

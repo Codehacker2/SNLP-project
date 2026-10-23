@@ -20,11 +20,11 @@ uv run uvicorn api:app --app-dir src --port 8000
 
 The grader also requires the PromptGuard service described in [`backend/README.md`](backend/README.md); set `PROMPTGUARD_URL` if it is not on `http://127.0.0.1:8001`. The first run may download the digitizer's TrOCR model and the grader's sentence encoder.
 
-1. Open the digitizer review page at `http://127.0.0.1:8002/ui`, upload scanned pages, check the transcript and export reviewed JSON.
-2. Run `python -m http.server 5500 --directory frontend` from the repository root and open `http://127.0.0.1:5500`.
-3. In **Grade a digitized booklet**, select the reviewed JSON and an answer key such as [`digitizer/demo/answer_key.json`](digitizer/demo/answer_key.json). Download the resulting marksheet JSON.
+1. Run `python -m http.server 5500 --directory frontend` from the repository root and open `http://127.0.0.1:5500`.
+2. In **Grade a scanned booklet**, upload **one PDF** or **one or more JPG/PNG pages** named in page order, plus an answer key such as [`digitizer/demo/answer_key.json`](digitizer/demo/answer_key.json). Image pages are sorted by filename. You may provide a roster of valid student IDs.
+3. Check the recognized answers and download the digitized JSON and marksheet. Answers with OCR uncertainty or an unknown student ID stay in the human review queue. To correct them, use the [digitizer review page](http://127.0.0.1:8002/ui), export reviewed JSON, then upload that JSON in the same grader form.
 
-The browser sends both files to `POST /grade-booklet?model=v3`. The request body is:
+The browser sends scans to `POST /digitize-pages`, which forwards them to the digitizer's `/digitize-base64` endpoint. It then sends the returned schema 1.0 JSON and answer key to `POST /grade-booklet?model=v3`. Set `DIGITIZER_URL` on the grader service if the digitizer is not at `http://127.0.0.1:8002`. The `POST /grade-booklet` request body is:
 
 ```json
 {"booklet": {"schema_version": "1.0", "booklet_id": "B1", "student_id": "S1", "answers": [{"question": "Q1", "answer_text": "example", "page": 1, "confidence": 0.9, "needs_review": false, "flags": []}]}, "answer_key": {"Q1": {"question_text": "Question one", "reference_answer": "example", "rubric": ["example"], "max_marks": 5}}}

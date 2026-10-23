@@ -102,26 +102,43 @@
 
       <section class="result-card" aria-labelledby="booklet-title">
         <p class="eyebrow">Handwritten booklets</p>
-        <h2 id="booklet-title">Grade a digitized booklet</h2>
-        <p class="intro">Export reviewed JSON from the digitizer, then provide the matching answer key. Answers needing review will stay in the review queue.</p>
+        <h2 id="booklet-title">Grade a scanned booklet</h2>
+        <p class="intro">Upload one PDF, one or more JPG/PNG pages, or a reviewed digitizer JSON. Answers needing review will stay in the review queue.</p>
         <form id="booklet-form">
           <div class="field">
-            <label for="booklet-file">Digitizer JSON</label>
-            <input id="booklet-file" name="booklet" type="file" accept=".json,application/json" required />
+            <label for="booklet-files">Scanned pages or reviewed JSON</label>
+            <input id="booklet-files" name="booklet-files" type="file" accept=".pdf,.jpg,.jpeg,.png,.json,application/pdf,image/jpeg,image/png,application/json" multiple required />
+            <small>Image pages are read in filename order. Choose one file for a PDF or JSON.</small>
           </div>
           <div class="field">
             <label for="answer-key-file">Answer key JSON</label>
             <input id="answer-key-file" name="answer-key" type="file" accept=".json,application/json" required />
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="booklet-id">Booklet ID (optional)</label>
+              <input id="booklet-id" name="booklet-id" type="text" placeholder="From file name" />
+            </div>
+            <div class="field">
+              <label for="roster">Valid student IDs (optional)</label>
+              <input id="roster" name="roster" type="text" placeholder="23D001, 23D002" />
+            </div>
           </div>
           <button id="booklet-submit" type="submit">Grade booklet</button>
           <p id="booklet-status" class="status" role="status"></p>
         </form>
         <div id="booklet-result" hidden>
           <p id="booklet-summary"></p>
+          <details id="transcript-panel" hidden>
+            <summary>Recognized answers</summary>
+            <ul id="booklet-transcript"></ul>
+          </details>
           <h3>Graded answers</h3>
           <ul id="booklet-graded"></ul>
           <h3>Human review queue</h3>
           <ul id="booklet-review"></ul>
+          <p>For OCR corrections, use the <a href="http://127.0.0.1:8002/ui" target="_blank" rel="noopener noreferrer">digitizer review page</a>, then upload its reviewed JSON here.</p>
+          <button id="booklet-transcript-download" type="button" hidden>Download digitized JSON</button>
           <button id="booklet-download" type="button">Download marksheet JSON</button>
         </div>
       </section>

@@ -93,41 +93,98 @@ const bookletStatus = document.querySelector("#booklet-status");
 const bookletResult = document.querySelector("#booklet-result");
 const bookletSubmit = document.querySelector("#booklet-submit");
 let marksheet = null;
+let digitizedBooklet = null;
 
 bookletForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   bookletSubmit.disabled = true;
-  bookletStatus.textContent = "Grading booklet...";
+  bookletStatus.textContent = "Reading booklet...";
   bookletResult.hidden = true;
+  marksheet = null;
+  digitizedBooklet = null;
   try {
-    const booklet = JSON.parse(await bookletForm.elements.booklet.files[0].text());
+    const files = Array.from(bookletForm.elements["booklet-files"].files);
+    if (!files.length) throw new Error("Choose a PDF, page images, or a reviewed JSON file.");
     const answerKey = JSON.parse(await bookletForm.elements["answer-key"].files[0].text());
-    const response = await fetch(`${API_URL}/grade-booklet`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ booklet, answer_key: answerKey }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(typeof data.detail === "string" ? data.detail : "The booklet could not be graded.");
+    if (files.length === 1 && /\.json$/i.test(files[0].name)) {
+      digitizedBooklet = JSON.parse(await files[0].text());
+    } else {
+      if (files.some((file) => !/\.(pdf|png|jpe?g)$/i.test(file.name))) {
+        throw new Error("Use one PDF or JPG/PNG page images; do not mix file types.");
+      }
+      if (files.some((file) => /\.pdf$/i.test(file.name)) && files.length !== 1) {
+        throw new Error("Choose only one PDF, or select multiple JPG/PNG pages.");
+      }
+      if (files.reduce((total, file) => total + file.size, 0) > 60_000_000) {
+        throw new Error("Page files must total 60 MB or less.");
+      }
+      if (files.length > 1) {
+        const byPageName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+        files.sort((first, second) => byPageName.compare(first.name, second.name));
+      }
+      bookletStatus.textContent = "Digitizing scanned pages. This may take a few minutes...";
+      const pages = await Promise.all(files.map(fileToBase64));
+      const rosterText = bookletForm.elements.roster.value.trim();
+      digitizedBooklet = await postBookletJson("/digitize-pages", {
+        pages,
+        booklet_id: bookletForm.elements["booklet-id"].value.trim() || files[0].name.replace(/\.[^.]+$/, ""),
+        roster: rosterText ? rosterText.split(/[\s,]+/).filter(Boolean) : null,
+      });
     }
-    marksheet = data;
-    document.querySelector("#booklet-summary").textContent =
-      `${data.booklet_id} · Student ${data.student_id || "unknown"} · ${data.auto_marks}/${data.auto_max} marks graded · ${data.review_queue.length} answers for review`;
-    renderBookletList("#booklet-graded", data.graded,
-      (entry) => `${entry.question}: ${entry.score}/${entry.maximum_score} · ${entry.feedback || ""}`);
-    renderBookletList("#booklet-review", data.review_queue,
-      (entry) => `${entry.question}: ${entry.reason}`);
+    const transcriptPanel = document.querySelector("#transcript-panel");
+    transcriptPanel.hidden = false;
+    renderBookletList("#booklet-transcript", digitizedBooklet.answers || [],
+      (entry) => `${entry.question}${entry.needs_review ? " (needs review)" : ""}: ${entry.answer_text}`);
+    document.querySelector("#booklet-transcript-download").hidden = false;
+    document.querySelector("#booklet-download").hidden = true;
     bookletResult.hidden = false;
+    bookletStatus.textContent = "Grading eligible answers...";
+
+    marksheet = await postBookletJson("/grade-booklet", { booklet: digitizedBooklet, answer_key: answerKey });
+    document.querySelector("#booklet-summary").textContent =
+      `${marksheet.booklet_id} · Student ${marksheet.student_id || "unknown"} · ${marksheet.auto_marks}/${marksheet.auto_max} marks graded · ${marksheet.review_queue.length} answers for review`;
+    renderBookletList("#booklet-graded", marksheet.graded,
+      (entry) => `${entry.question}: ${entry.score}/${entry.maximum_score} · ${entry.feedback || ""}`);
+    renderBookletList("#booklet-review", marksheet.review_queue,
+      (entry) => `${entry.question}: ${entry.reason}`);
+    document.querySelector("#booklet-download").hidden = false;
     bookletStatus.textContent = "Booklet processed.";
   } catch (error) {
     bookletStatus.textContent = error instanceof TypeError
       ? "Could not connect to the grader. Start the backend at 127.0.0.1:8000."
       : error.message;
+    if (digitizedBooklet) {
+      document.querySelector("#booklet-summary").textContent =
+        "Digitized booklet saved. Grading could not finish; download the transcript and retry.";
+      renderBookletList("#booklet-graded", [], () => "");
+      renderBookletList("#booklet-review", [], () => "");
+    }
   } finally {
     bookletSubmit.disabled = false;
   }
 });
+
+async function postBookletJson(path, payload) {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(typeof data.detail === "string" ? data.detail : "The booklet could not be processed.");
+  }
+  return data;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(",", 2)[1]);
+    reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+    reader.readAsDataURL(file);
+  });
+}
 
 function renderBookletList(selector, entries, describe) {
   const list = document.querySelector(selector);
@@ -145,12 +202,20 @@ function renderBookletList(selector, entries, describe) {
 }
 
 document.querySelector("#booklet-download").addEventListener("click", () => {
-  if (!marksheet) return;
-  const blob = new Blob([JSON.stringify(marksheet, null, 2)], { type: "application/json" });
+  downloadJson(marksheet, `${marksheet?.booklet_id || "booklet"}_marksheet.json`);
+});
+
+document.querySelector("#booklet-transcript-download").addEventListener("click", () => {
+  downloadJson(digitizedBooklet, `${digitizedBooklet?.booklet_id || "booklet"}_digitized.json`);
+});
+
+function downloadJson(data, name) {
+  if (!data) return;
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `${marksheet.booklet_id || "booklet"}_marksheet.json`;
+  link.download = name;
   link.click();
   URL.revokeObjectURL(url);
-});
+}
