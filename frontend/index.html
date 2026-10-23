@@ -99,6 +99,32 @@
           <ul id="missing-points"></ul>
         </div>
       </section>
+
+      <section class="result-card" aria-labelledby="booklet-title">
+        <p class="eyebrow">Handwritten booklets</p>
+        <h2 id="booklet-title">Grade a digitized booklet</h2>
+        <p class="intro">Export reviewed JSON from the digitizer, then provide the matching answer key. Answers needing review will stay in the review queue.</p>
+        <form id="booklet-form">
+          <div class="field">
+            <label for="booklet-file">Digitizer JSON</label>
+            <input id="booklet-file" name="booklet" type="file" accept=".json,application/json" required />
+          </div>
+          <div class="field">
+            <label for="answer-key-file">Answer key JSON</label>
+            <input id="answer-key-file" name="answer-key" type="file" accept=".json,application/json" required />
+          </div>
+          <button id="booklet-submit" type="submit">Grade booklet</button>
+          <p id="booklet-status" class="status" role="status"></p>
+        </form>
+        <div id="booklet-result" hidden>
+          <p id="booklet-summary"></p>
+          <h3>Graded answers</h3>
+          <ul id="booklet-graded"></ul>
+          <h3>Human review queue</h3>
+          <ul id="booklet-review"></ul>
+          <button id="booklet-download" type="button">Download marksheet JSON</button>
+        </div>
+      </section>
     </main>
 
     <script src="app.js"></script>

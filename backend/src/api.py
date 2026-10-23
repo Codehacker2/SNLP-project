@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from features import TextEncoder
 from grade import V2_NLP_Pipeline
+from booklet import GradeBookletRequest, grade_booklet
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 MODEL_PATH = BACKEND_DIR / "models" / "grader_models.joblib"
@@ -206,3 +207,25 @@ def evaluate_answer(req: EvaluateAnswerRequest, model: ModelChoice = "v3"):
     result["grading_status"] = "graded"
     result["promptguard"] = promptguard_summary
     return result
+
+
+@app.post("/grade-booklet")
+def evaluate_booklet(req: GradeBookletRequest, model: ModelChoice = "v3"):
+    """Grade a reviewed Group 1 digitizer JSON using this service's grader."""
+    def evaluate(question: str, reference: str, rubric: str, answer: str, marks: int) -> dict:
+        result = evaluate_answer(
+            EvaluateAnswerRequest(
+                question=question,
+                reference_answer=reference,
+                marking_rubric=rubric,
+                student_answer=answer,
+                maximum_marks=marks,
+            ),
+            model=model,
+        )
+        return result.model_dump() if isinstance(result, BaseModel) else result
+
+    try:
+        return grade_booklet(req, evaluate)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
