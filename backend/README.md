@@ -55,6 +55,16 @@ documentation is available at:
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - ReDoc: `http://127.0.0.1:8000/redoc`
 
+### Connect PromptGuard locally
+
+Before grading, the API sends each student answer to PromptGuard's standalone
+`POST /v1/analyze` endpoint. Set `PROMPTGUARD_URL` to the local PromptGuard
+base URL when it differs from the default `http://127.0.0.1:8001`.
+`PROMPTGUARD_TIMEOUT_SECONDS` controls the HTTP timeout and defaults to `5`.
+Answers marked `BLOCK` or `HUMAN_REVIEW` are returned for human review without
+automatic grading. Answers marked `SANITIZE` are graded using PromptGuard's
+sanitized text. PromptGuard failures return an explicit `502` or `504`.
+
 ### Run the simple frontend
 
 With the API running, open a second terminal from the repository root:
@@ -84,7 +94,8 @@ Example response:
 
 ### Evaluate an answer
 
-`POST /evaluate-answer` accepts the following JSON body:
+`POST /evaluate-answer` accepts the following JSON body. The
+`maximum_marks` value is required and should be supplied by the frontend:
 
 ```json
 {
@@ -123,7 +134,11 @@ Response shape:
 The model predicts a grade band first, so scores are rounded from
 `(predicted_label / 2) * maximum_marks`. `missing_key_points` contains up to
 three reference points whose semantic similarity is below the explainability
-threshold.
+threshold. A correct-class prediction is capped at partially correct when fewer
+than half of the reference points are missing, and forced to incorrect when at
+least half are missing. This prevents a low-confidence model error from
+awarding full marks to an answer that contradicts or does not address the
+reference answer.
 
 ## Run the command-line grader
 

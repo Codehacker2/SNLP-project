@@ -50,10 +50,20 @@ class V2_NLP_Pipeline:
 
         missing = [p for p, sim in details[0] if sim < MISSING_POINT_THRESHOLD]
         result["missing_key_points"] = missing[:3]
+        if label >= 2 and missing:
+            # A correct-class prediction must not override the explainability
+            # evidence when required reference points are absent.
+            label = 0 if len(missing) * 2 >= len(details[0]) else 1
+            result["score"] = round((label / 2.0) * max_marks)
         if missing:
-            if label >= 2:
+            if label == 0:
                 result["feedback"] = (
-                    "The answer is graded correct overall, but these reference points were not found: "
+                    "The answer does not address the reference answer. Missing reference points: "
+                    + "; ".join(missing[:3]) + "."
+                )
+            elif label == 1:
+                result["feedback"] = (
+                    "The answer is partially correct but misses these reference points: "
                     + "; ".join(missing[:3]) + "."
                 )
             else:
